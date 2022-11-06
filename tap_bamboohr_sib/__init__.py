@@ -8,9 +8,9 @@ from singer import utils, metadata
 from singer.catalog import Catalog, CatalogEntry
 from singer.schema import Schema
 from tap_bamboohr_sib.bamboohr_streams import BamboohrApi
+import base64
 
-
-REQUIRED_CONFIG_KEYS = ["api-token", "date_from"]
+REQUIRED_CONFIG_KEYS = ["api_key","subdomain", "date_from"]
 LOGGER = singer.get_logger()
 
 
@@ -28,9 +28,15 @@ def load_schemas():
             schemas[file_raw] = Schema.from_dict(json.load(file))
     return schemas
 
+def get_bookmark(stream_id):
+    bookmark = {
+        "timeoffs": "latest_date",
+    }
+    return bookmark.get(stream_id)
+
 def get_key_properties(stream_id):
     key_properties = {
-        "employess_directory": ["id"],
+        "employees_directory": ["id"],
         "timeoffs": ["id"],
     }
     return key_properties.get(stream_id, [])
@@ -47,11 +53,21 @@ def generate_dates_to_today(date_from_str:str):
     for dt in daterange(date_from, date_to):
         yield dt.strftime(format)
 
+def encode_api_key(api_key):
+
+        sample_string = f"{api_key}:nothingtoseehere"
+        sample_string_bytes = sample_string.encode("ascii")
+        
+        base64_bytes = base64.b64encode(sample_string_bytes)
+        base64_string = base64_bytes.decode("ascii")
+        
+        return base64_string
+
 def discover():
     raw_schemas = load_schemas()
     streams = []
     for stream_id, schema in raw_schemas.items():
-        if stream_id=="employees_directory":
+        # if stream_id == "timeoffs":
             # TODO: populate any metadata and stream's key properties here..
             stream_metadata = []
             key_properties = get_key_properties(stream_id)
@@ -80,31 +96,60 @@ def sync(config, state, catalog):
     for stream in catalog.get_selected_streams(state):
         LOGGER.info("Syncing stream:" + stream.tap_stream_id)
 
-        bookmark_column = stream.replication_key
+        if stream.tap_stream_id == "timeoffs":
+            bookmark_column = get_bookmark(stream.tap_stream_id)
+            bookmark_value = singer.get_bookmark(state, stream.tap_stream_id, bookmark_column)
+            if bookmark_value is None:
+                bookmark_value = config["date_from"]
+        else:
+            bookmark_column = False
+
         is_sorted = True  # TODO: indicate whether data is sorted ascending on bookmark value
+
+        if stream.tap_stream_id not in BamboohrApi.bamboohr_streams:
+            raise Exception(f"Unknown stream : {stream.tap_stream_id}")
 
         singer.write_schema(
             stream_name=stream.tap_stream_id,
-            schema=stream.schema,
+            schema=stream.schema.to_dict(),
             key_properties=stream.key_properties,
         )
 
         # TODO: delete and replace this inline function with your own data retrieval process:
-        tap_data = BamboohrApi.get_employees()
+        # tap_data = BamboohrApi.get_employees()
+        encoded_api_key = encode_api_key(config["api_key"])
+        bamboohr_client = BamboohrApi(encoded_api_key, config["subdomain"])
 
         max_bookmark = None
-        for row in tap_data():
-            # TODO: place type conversions or transformations here
+        if stream.tap_stream_id == "employees_directory":
+            for record in bamboohr_client.get_sync_endpoints(stream.tap_stream_id, config["subdomain"]):
+                # write one or more rows to the stream:
+                singer.write_records(stream.tap_stream_id, record)
+            # if bookmark_column:
+            #     if is_sorted:
+            #         # update bookmark to latest value
+            #         singer.write_state({stream.tap_stream_id: bookmark_column})
+            #     else:
+            #         # if data unsorted, save max value until end of writes
+            #         max_bookmark = max(max_bookmark, bookmark_column)
 
-            # write one or more rows to the stream:
-            singer.write_records(stream.tap_stream_id, [row])
-            if bookmark_column:
-                if is_sorted:
-                    # update bookmark to latest value
-                    singer.write_state({stream.tap_stream_id: row[bookmark_column]})
-                else:
-                    # if data unsorted, save max value until end of writes
-                    max_bookmark = max(max_bookmark, row[bookmark_column])
+        elif stream.tap_stream_id == "timeoffs":
+            for date_from in generate_dates_to_today(bookmark_value):
+                for record in bamboohr_client.get_sync_endpoints(stream.tap_stream_id, config["subdomain"], parameters={'start': date_from,
+                                                                'end': date_from}):
+                    # write one or more rows to the stream:
+                    singer.write_records(stream.tap_stream_id, record)
+                if bookmark_column:
+                    if is_sorted:
+                        # update bookmark to latest value
+                        state = singer.write_bookmark(
+                            state, stream.tap_stream_id, bookmark_column, date_from
+                        )
+                        singer.write_state(state)
+                    else:
+                        # if data unsorted, save max value until end of writes
+                        max_bookmark = max(max_bookmark, bookmark_column)
+
         if bookmark_column and not is_sorted:
             singer.write_state({stream.tap_stream_id: max_bookmark})
     return
