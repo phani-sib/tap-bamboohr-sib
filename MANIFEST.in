@@ -1,2 +1,2 @@
 include LICENSE
-include tap_bamboohr_sib/schemas/*.json
+include tap_bamboohr/schemas/*.json

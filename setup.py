@@ -2,13 +2,13 @@
 from setuptools import setup
 
 setup(
-    name="tap-bamboohr-sib",
+    name="tap-bamboohr",
     version="0.1.0",
     description="Singer.io tap for extracting data",
     author="Stitch",
     url="http://singer.io",
     classifiers=["Programming Language :: Python :: 3 :: Only"],
-    py_modules=["tap_bamboohr_sib"],
+    py_modules=["tap_bamboohr"],
     install_requires=[
         # NB: Pin these to a more specific version for tap reliability
         "singer-python",
@@ -16,11 +16,11 @@ setup(
     ],
     entry_points="""
     [console_scripts]
-    tap-bamboohr-sib=tap_bamboohr_sib:main
+    tap-bamboohr=tap_bamboohr:main
     """,
-    packages=["tap_bamboohr_sib"],
+    packages=["tap_bamboohr"],
     package_data = {
-        "schemas": ["tap_bamboohr_sib/schemas/*.json"]
+        "schemas": ["tap_bamboohr/schemas/*.json"]
     },
     include_package_data=True,
 )
