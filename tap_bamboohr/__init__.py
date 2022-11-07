@@ -7,7 +7,7 @@ import singer
 from singer import utils, metadata
 from singer.catalog import Catalog, CatalogEntry
 from singer.schema import Schema
-from tap_bamboohr_sib.bamboohr_streams import BamboohrApi
+from tap_bamboohr.bamboohr_streams import BamboohrApi
 import base64
 
 REQUIRED_CONFIG_KEYS = ["api_key","subdomain", "date_from"]
