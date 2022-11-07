@@ -1,4 +1,4 @@
-# tap-bamboohr-sib
+# tap-bamboohr
 
 This is a [Singer](https://singer.io) tap that produces JSON-formatted data
 following the [Singer
