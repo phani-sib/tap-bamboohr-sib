@@ -47,7 +47,7 @@ def daterange(date1, date2):
 
 def generate_dates_to_today(date_from_str:str):
     format = '%Y-%m-%d'
-    date_from = datetime.datetime.strptime(date_from_str, format)
+    date_from = datetime.datetime.strptime(date_from_str, format) - timedelta(1)
     date_to = datetime.datetime.today()
 
     for dt in daterange(date_from, date_to):
